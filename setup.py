@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="open3d-ros-helper",
-    version="0.0.1.3",
+    version="0.0.1.4",
     author="Seunghyeok Back",
     author_email="shback@gist.ac.kr",
     description="A helper tool for jointly using ros-numpy and open3d",
