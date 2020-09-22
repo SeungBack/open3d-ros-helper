@@ -6,7 +6,6 @@ import tf.transformations as t
 import rospy
 import copy
 import image_geometry
-from tqdm import tqdm
 import cv2
 
 def convert_ros_to_o3d(ros_msg, remove_nans=False):
