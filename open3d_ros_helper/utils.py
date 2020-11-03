@@ -1,12 +1,219 @@
 import ros_numpy
 import open3d
 import numpy as np
-from sensor_msgs.msg import PointCloud2, PointField
 import tf.transformations as t
 import rospy
 import copy
 import image_geometry
 import cv2
+
+from std_msgs.msg import Header
+from sensor_msgs.msg import PointCloud2, PointField
+from geometry_msgs.msg import Point, Pose, PoseStamped, Quaternion, Transform, TransformStamped, Vector3
+
+
+
+import numpy as np
+import numpy.matlib as npm
+
+
+# source codes from https://answers.ros.org/question/332407/transformstamped-to-transformation-matrix-python/
+def pose_to_pq(msg):
+    """Convert a C{geometry_msgs/Pose} into position/quaternion np arrays
+
+    @param msg: ROS message to be converted
+    @return:
+      - p: position as a np.array
+      - q: quaternion as a numpy array (order = [x,y,z,w])
+    """
+    p = np.array([msg.position.x, msg.position.y, msg.position.z])
+    q = np.array([msg.orientation.x, msg.orientation.y,
+                  msg.orientation.z, msg.orientation.w])
+    return p, q
+
+
+def pose_stamped_to_pq(msg):
+    """Convert a C{geometry_msgs/PoseStamped} into position/quaternion np arrays
+
+    @param msg: ROS message to be converted
+    @return:
+      - p: position as a np.array
+      - q: quaternion as a numpy array (order = [x,y,z,w])
+    """
+    return pose_to_pq(msg.pose)
+
+
+def transform_to_pq(msg):
+    """Convert a C{geometry_msgs/Transform} into position/quaternion np arrays
+
+    @param msg: ROS message to be converted
+    @return:
+      - p: position as a np.array
+      - q: quaternion as a numpy array (order = [x,y,z,w])
+    """
+    p = np.array([msg.translation.x, msg.translation.y, msg.translation.z])
+    q = np.array([msg.rotation.x, msg.rotation.y,
+                  msg.rotation.z, msg.rotation.w])
+    return p, q
+
+
+def transform_stamped_to_pq(msg):
+    """Convert a C{geometry_msgs/TransformStamped} into position/quaternion np arrays
+
+    @param msg: ROS message to be converted
+    @return:
+      - p: position as a np.array
+      - q: quaternion as a numpy array (order = [x,y,z,w])
+    """
+    return transform_to_pq(msg.transform)
+
+
+def msg_to_se3(msg):
+    """Conversion from geometric ROS messages into SE(3)
+
+    @param msg: Message to transform. Acceptable types - C{geometry_msgs/Pose}, C{geometry_msgs/PoseStamped},
+    C{geometry_msgs/Transform}, or C{geometry_msgs/TransformStamped}
+    @return: a 4x4 SE(3) matrix as a numpy array
+    @note: Throws TypeError if we receive an incorrect type.
+    """
+    if isinstance(msg, Pose):
+        p, q = pose_to_pq(msg)
+    elif isinstance(msg, PoseStamped):
+        p, q = pose_stamped_to_pq(msg)
+    elif isinstance(msg, Transform):
+        p, q = transform_to_pq(msg)
+    elif isinstance(msg, TransformStamped):
+        p, q = transform_stamped_to_pq(msg)
+    else:
+        raise TypeError("Invalid type for conversion to SE(3)")
+    norm = np.linalg.norm(q)
+    if np.abs(norm - 1.0) > 1e-3:
+        raise ValueError(
+            "Received un-normalized quaternion (q = {0:s} ||q|| = {1:3.6f})".format(
+                str(q), np.linalg.norm(q)))
+    elif np.abs(norm - 1.0) > 1e-6:
+        q = q / norm
+    g = t.quaternion_matrix(q)
+    g[0:3, -1] = p
+    return g
+
+
+def pq_to_transform(p, q):
+    """ convert position, quaternion to geometry_msgs/Transform
+
+    Args:
+        p (np.array): position array of [x, y, z]
+        q (np.array): quaternion array of [x, y, z, w]
+
+    Returns:
+        [geometry_msgs/Transform]: ROS message
+    """
+
+    transform = Transform()
+    transform.translation.x = p[0]
+    transform.translation.y = p[1]
+    transform.translation.z = p[2]
+
+    transform.rotation.x = q[0]
+    transform.rotation.y = q[1]
+    transform.rotation.z = q[2]
+    transform.rotation.w = q[3]
+
+    return transform
+
+def pq_to_transform_stamped(p, q, source_frame, target_frame, stamp=None):
+    """ convert position, quaternion to geometry_msgs/TransformStamped
+
+    Args:
+        p (np.array): position array of [x, y, z]
+        q (np.array): quaternion array of [x, y, z, w]
+        source_frame (string): name of tf source frame
+        target_frame (string): name of tf target frame
+
+    Returns:
+        [geometry_msgs/TransformStamped]: ROS message
+    """
+
+    transform_stamped = TransformStamped()
+    transform_stamped.header.frame_id = source_frame
+    if stamp is None: stamp = rospy.Time.now() 
+    transform_stamped.header.stamp = stamp
+    transform_stamped.child_frame_id = target_frame
+    transform_stamped.transform = pq_to_transform(p, q)
+
+    return transform_stamped
+
+def se3_to_transform(transform_nparray):
+    """convert 4x4 SE(3) to geometry_msgs/Transform
+
+    Args:
+        transform_nparray (np.array): 4x4 SE(3) 
+
+    Returns:
+        [geometry_msgs/Transform]: ROS message
+    """
+
+    pos = transform_nparray[:3, 3] 
+    quat = t.quaternion_from_matrix(transform_nparray)
+
+    return pq_to_transform(pos, quat)
+
+
+def se3_to_transform_stamped(transform_nparray, source_frame, target_frame, stamp=None):
+    """convert 4x4 SE(3) to geometry_msgs/TransformStamped
+
+    Args:
+        transform_nparray (np.array): 4x4 SE(3) 
+        source_frame (string): name of tf source frame
+        target_frame (string): name of tf target frame
+
+    Returns:
+        [geometry_msgs/TransformStamped]: ROS message
+    """
+
+    pos = transform_nparray[:3, 3] 
+    quat = t.quaternion_from_matrix(transform_nparray)
+    if stamp is None: stamp = rospy.Time.now() 
+
+    return pq_to_transform_stamped(pos, quat, source_frame, target_frame, stamp)
+
+
+def average_q(qs):
+    # source codes from https://github.com/christophhagen/averaging-quaternions
+    # Number of quaternions to average
+    M = qs.shape[0]
+    A = npm.zeros(shape=(4,4))
+
+    for i in range(0,M):
+        q = qs[i,:]
+        # multiply q with its transposed version q' and add A
+        A = np.outer(q, q) + A
+    # scale
+    A = (1.0/M)*A
+    # compute eigenvalues and -vectors
+    eigenValues, eigenVectors = np.linalg.eig(A)
+    # Sort by largest eigenvalue
+    eigenVectors = eigenVectors[:,eigenValues.argsort()[::-1]]
+    # return the real part of the largest eigenvector (has only real part)
+    return np.real(eigenVectors[:,0].A1)
+
+
+def average_pq(ps, qs):
+    """ average the multiple position and quaternion array
+
+    Args:
+        ps (np.array): multiple position array of shape Nx3 
+        qs (np.array): multiple quaternion array of shape Nx4 
+
+    Returns:
+        p (np.array): position array of [x, y, z]
+        q (np.array): quaternion array of [x, y, z, w] """
+
+    p_mean = np.mean(np.asarray(ps), axis=0)
+    q_mean = average_q(np.asarray(qs))
+    return p_mean, q_mean
+
+
 
 def convert_ros_to_o3d(ros_msg, remove_nans=False):
 
@@ -56,14 +263,17 @@ def convert_o3d_to_ros(cloud_o3d, frame_id=None):
     return ros_msg
 
 
-def do_transform_o3d_cloud(cloud_o3d, transformStamped):
+
+
+
+def do_transform_o3d_cloud(cloud_o3d, transform_stamped):
 
     H = t.quaternion_matrix([
-        transformStamped.transform.rotation.x, transformStamped.transform.rotation.y, 
-        transformStamped.transform.rotation.z, transformStamped.transform.rotation.w])
-    H[:3, 3] = [transformStamped.transform.translation.x, 
-                transformStamped.transform.translation.y, 
-                transformStamped.transform.translation.z]
+        transform_stamped.transform.rotation.x, transform_stamped.transform.rotation.y, 
+        transform_stamped.transform.rotation.z, transform_stamped.transform.rotation.w])
+    H[:3, 3] = [transform_stamped.transform.translation.x, 
+                transform_stamped.transform.translation.y, 
+                transform_stamped.transform.translation.z]
     cloud_o3d = copy.deepcopy(cloud_o3d)
     cloud_o3d.transform(H)
     return cloud_o3d
@@ -130,6 +340,7 @@ def crop_o3d_cloud_with_mask(cloud_o3d, mask, remove_nans=False, camera_info=Non
 
 def icp_refinement(source_cloud, target_cloud, n_points=100, threshold=0.02, \
     relative_fitness=1e-10, relative_rmse=1e-8, max_iteration=500, max_correspondence_distance=500):
+
     source_cloud = copy.deepcopy(source_cloud)
     target_cloud = copy.deepcopy(target_cloud)
     n_source_points = np.shape(source_cloud.points)[0]
@@ -162,7 +373,7 @@ def icp_refinement_with_ppf_match(source_cloud, target_cloud, n_points=3000, n_i
     n_target_points = np.shape(target_cloud.points)[0]
     n_sample = np.min([n_source_points, n_target_points, n_points])
     if n_sample == 0:
-        return None, 999999999
+        return None, 10000
     if n_source_points > n_points:
         source_idxes = np.random.choice(n_source_points, n_sample, replace=False)
         source_cloud = source_cloud.select_down_sample(source_idxes)
