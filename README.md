@@ -1,5 +1,13 @@
 # open3d-ros-helper
 
+[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://GitHub.com/Naereen/StrapDown.js/graphs/commit-activity)
+[![PyPI version](https://badge.fury.io/py/open3d-ros-helper.svg)](https://badge.fury.io/py/open3d-ros-helper)
+[![PyPI license](https://img.shields.io/pypi/l/ansicolortags.svg)](https://pypi.python.org/pypi/open3d-ros-helper/)
+[![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2FSeungBack%2Fopen3d-ros-helper&count_bg=%2379C83D&title_bg=%23555555&icon=&icon_color=%23E7E7E7&title=hits&edge_flat=false)](https://hits.seeyoufarm.com)
+[![Python 2.7](https://img.shields.io/badge/python-2.7-blue.svg)](https://www.python.org/downloads/release/python-270/)
+[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/SeungBack/open3d-ros-helper/issues)
+
+
 - Helper for jointly using open3d and numpy in ROS
 - Easy conversion between ros pose and transform 
 - Easy conversion between ros and open3d point cloud
@@ -42,7 +50,6 @@ Some codes are rewritten from
 - [pcl_herlper](https://github.com/udacity/RoboND-Perception-Exercises)
 - [conversion b/w ros transforms](https://answers.ros.org/question/332407/transformstamped-to-transformation-matrix-python/)
 - [averaging-quaternion](https://github.com/christophhagen/averaging-quaternions)
-
 
 
 
