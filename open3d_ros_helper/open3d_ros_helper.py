@@ -98,6 +98,44 @@ def msg_to_se3(msg):
     return se3
 
 
+def pq_to_pose_stamped(p, q, source_frame, target_frame, stamp=None):
+    """ convert position, quaternion to  geometry_msgs/PoseStamped
+    Args:
+        p (np.array): position array of [x, y, z]
+        q (np.array): quaternion array of [x, y, z, w]
+        source_frame (string): name of tf source frame
+        target_frame (string): name of tf target frame
+    Returns:
+        pose_stamped (geometry_msgs/PoseStamped): ROS geometric message to be converted of given p and q
+    """
+    pose_stamped = PoseStamped()
+    pose_stamped.header.frame_id = source_frame
+    if stamp is None: stamp = rospy.Time.now() 
+    pose_stamped.header.stamp = stamp
+    pose_stamped.child_frame_id = target_frame
+    pose_stamped.pose = pq_to_pose(p, q)
+
+    return pose_stamped
+
+
+def pq_to_pose(p, q):
+    """ convert position, quaternion to geometry_msgs/Pose
+    Args:
+        p (np.array): position array of [x, y, z]
+        q (np.array): quaternion array of [x, y, z, w]
+    Returns:
+        pose (geometry_msgs/Pose): ROS geometric message to be converted of given p and q
+    """
+    pose = Pose()
+    pose.position.x = p[0]
+    pose.position.y = p[1]
+    pose.position.z = p[2]
+    pose.orientation.x = q[0]
+    pose.orientation.y = q[1]
+    pose.orientation.z = q[2]
+    pose.orientation.w = q[3]
+    return pose
+
 def pq_to_transform(p, q):
     """ convert position, quaternion to geometry_msgs/Transform
     Args:
@@ -206,6 +244,10 @@ def average_pq(ps, qs):
     return p_average, q_average
 
 
+convert_rgbUint32_to_tuple = lambda rgb_uint32: (
+    (rgb_uint32 & 0x00ff0000)>>16, (rgb_uint32 & 0x0000ff00)>>8, (rgb_uint32 & 0x000000ff)
+)
+
 def rospc_to_o3dpc(rospc, remove_nans=False):
     """ covert ros point cloud to open3d point cloud
     Args: 
@@ -214,10 +256,37 @@ def rospc_to_o3dpc(rospc, remove_nans=False):
     Returns: 
         o3dpc (open3d.geometry.PointCloud): open3d point cloud
     """
-    cloud_npy = ros_numpy.point_cloud2.pointcloud2_to_xyz_array(rospc, remove_nans)
+    field_names = [field.name for field in rospc.fields]
+    is_rgb = 'rgb' in field_names
+    cloud_array = ros_numpy.point_cloud2.pointcloud2_to_array(rospc)
+    if remove_nans:
+        mask = np.isfinite(cloud_array['x']) & np.isfinite(cloud_array['y']) & np.isfinite(cloud_array['z'])
+        cloud_array = cloud_array[mask]
+    if is_rgb:
+        cloud_npy = np.zeros(cloud_array.shape + (4,), dtype=np.float)
+    else: 
+        cloud_npy = np.zeros(cloud_array.shape + (3,), dtype=np.float)
+    
+    cloud_npy[...,0] = cloud_array['x']
+    cloud_npy[...,1] = cloud_array['y']
+    cloud_npy[...,2] = cloud_array['z']
     o3dpc = open3d.geometry.PointCloud()
-    o3dpc.points = open3d.utility.Vector3dVector(cloud_npy)
+    o3dpc.points = open3d.utility.Vector3dVector(cloud_npy[:, :3])
+
+    if is_rgb:
+        rgb_npy = cloud_array['rgb']
+        rgb_npy.dtype = np.uint32
+        r = np.asarray((rgb_npy >> 16) & 255, dtype=np.uint8)
+        g = np.asarray((rgb_npy >> 8) & 255, dtype=np.uint8)
+        b = np.asarray(rgb_npy & 255, dtype=np.uint8)
+        rgb_npy = np.asarray([r, g, b])
+        rgb_npy = rgb_npy.astype(np.float)/255
+        rgb_npy = np.swapaxes(rgb_npy, 0, 1)
+        o3dpc.colors = open3d.utility.Vector3dVector(rgb_npy)
     return o3dpc
+
+BIT_MOVE_16 = 2**16
+BIT_MOVE_8 = 2**8
 
 def o3dpc_to_rospc(o3dpc, frame_id=None):
     """ convert open3d point cloud to ros point cloud
@@ -229,15 +298,33 @@ def o3dpc_to_rospc(o3dpc, frame_id=None):
     """
 
     cloud_npy = np.asarray(copy.deepcopy(o3dpc.points))
+    is_color = o3dpc.colors
+        
+
     n_points = len(cloud_npy[:, 0])
-    data = np.zeros(n_points, dtype=[
+    if is_color:
+        data = np.zeros(n_points, dtype=[
         ('x', np.float32),
         ('y', np.float32),
-        ('z', np.float32)
+        ('z', np.float32),
+        ('rgb', np.uint32)
         ])
+    else:
+        data = np.zeros(n_points, dtype=[
+            ('x', np.float32),
+            ('y', np.float32),
+            ('z', np.float32)
+            ])
     data['x'] = cloud_npy[:, 0]
     data['y'] = cloud_npy[:, 1]
     data['z'] = cloud_npy[:, 2]
+    
+    if is_color:
+        rgb_npy = np.asarray(copy.deepcopy(o3dpc.colors))
+        rgb_npy = np.floor(rgb_npy*255) # nx3 matrix
+        rgb_npy = rgb_npy[:, 0] * BIT_MOVE_16 + rgb_npy[:, 1] * BIT_MOVE_8 + rgb_npy[:, 2]  
+        rgb_npy = rgb_npy.astype(np.uint32)
+        data['rgb'] = rgb_npy
 
     rospc = ros_numpy.msgify(PointCloud2, data)
     if frame_id is not None:
@@ -259,8 +346,17 @@ def o3dpc_to_rospc(o3dpc, frame_id=None):
                             name="z",
                             offset=8,
                             datatype=PointField.FLOAT32, count=1))    
+
+    if is_color:
+        rospc.fields.append(PointField(
+                        name="rgb",
+                        offset=12,
+                        datatype=PointField.UINT32, count=1))    
+        rospc.point_step = 16
+    else:
+        rospc.point_step = 12
+    
     rospc.is_bigendian = False
-    rospc.point_step = 12
     rospc.row_step = rospc.point_step * n_points
     rospc.is_dense = True
     return rospc
@@ -299,20 +395,41 @@ def apply_pass_through_filter(o3dpc, x_range, y_range, z_range):
     o3dpc.points = open3d.utility.Vector3dVector(cloud_npy[pass_through_filter])
     return o3dpc
 
-def crop_with_2dmask(o3dpc, mask):
+def crop_with_2dmask(o3dpc, mask, K=None):
     """ crop open3d point cloud with given 2d binary mask
     Args: 
         o3dpc (open3d.geometry.PointCloud): open3d point cloud
-        mask (np.array): binary mask aligned with the point cloud frame
+        mask (np.array): binary mask aligned with the point cloud frame shape of [H, W]
+        K (np.array): intrinsic matrix of camera shape of (4x4)
+        if K is not given, point cloud should be ordered
     Returns:
         o3dpc (open3d.geometry.PointCloud): filtered open3d point cloud
     """
     o3dpc = copy.deepcopy(o3dpc)
     cloud_npy = np.asarray(o3dpc.points)
-    mask = np.resize(mask, cloud_npy.shape[0])
-    cloud_npy = cloud_npy[mask!=0]
-    o3dpc = open3d.geometry.PointCloud()
-    o3dpc.points = open3d.utility.Vector3dVector(cloud_npy)
+
+    if K is None:
+        mask = np.resize(mask, cloud_npy.shape[0])
+        cloud_npy = cloud_npy[mask!=0]
+        o3dpc = open3d.geometry.PointCloud()
+        o3dpc.points = open3d.utility.Vector3dVector(cloud_npy)
+    else:
+        # project 3D points to 2D pixel
+        cloud_npy = np.asarray(o3dpc.points)  
+        x = cloud_npy[:, 0]
+        y = cloud_npy[:, 1]
+        z = cloud_npy[:, 2]
+        px = np.uint16(x * K[0, 0]/z + K[0, 2])
+        py = np.uint16(y * K[1, 1]/z + K[1, 2])
+        # filter out the points out of the image
+        H, W = mask.shape
+        row_indices = np.logical_and(0 <= px, px < W-1)
+        col_indices = np.logical_and(0 <= py, py < H-1)
+        image_indices = np.logical_and(row_indices, col_indices)
+        cloud_npy = cloud_npy[image_indices]
+        mask_indices = mask[(py[image_indices], px[image_indices])]
+        mask_indices = np.where(mask_indices != 0)[0]
+        o3dpc.points = open3d.utility.Vector3dVector(cloud_npy[mask_indices])
     return o3dpc
 
 def p2p_icp_registration(source_cloud, target_cloud, n_points=100, threshold=0.02, \
@@ -346,7 +463,7 @@ def p2p_icp_registration(source_cloud, target_cloud, n_points=100, threshold=0.0
                                             max_iteration=max_iteration))                                               
     return icp_result, evaluation
             
-def ppf_icp_registration(source_cloud, target_cloud, n_points=3000, n_iter=100, tolerance=0.05, num_levels=5):
+def ppf_icp_registration(source_cloud, target_cloud, n_points=3000, n_iter=100, tolerance=0.001, num_levels=5, scale=0.001):
     """ align the source cloud to the target cloud using point pair feature (PPF) match
     Args: 
         source_cloud (open3d.geometry.PointCloud): source open3d point cloud
@@ -357,7 +474,7 @@ def ppf_icp_registration(source_cloud, target_cloud, n_points=3000, n_iter=100, 
         residual (float): the output resistration error
     """
     source_cloud = copy.deepcopy(source_cloud)
-    source_cloud = source_cloud.voxel_down_sample(0.003)
+    source_cloud = source_cloud.voxel_down_sample(scale)
     target_cloud = copy.deepcopy(target_cloud)
     n_source_points = np.shape(source_cloud.points)[0]
     n_target_points = np.shape(target_cloud.points)[0]
@@ -375,8 +492,11 @@ def ppf_icp_registration(source_cloud, target_cloud, n_points=3000, n_iter=100, 
     source_np_cloud = np.concatenate([np.asarray(source_cloud.points), np.asarray(source_cloud.normals)], axis=1).astype(np.float32)
     target_np_cloud = np.concatenate([np.asarray(target_cloud.points), np.asarray(target_cloud.normals)], axis=1).astype(np.float32)
     icp_fnc = cv2.ppf_match_3d_ICP(n_iter, tolerence=tolerance, rejectionScale=2.5, numLevels=num_levels) 
-    retval, residual, pose = icp_fnc.registerModelToScene(source_np_cloud, target_np_cloud)
-
-    return pose, residual
+    try:
+        retval, residual, pose = icp_fnc.registerModelToScene(source_np_cloud, target_np_cloud)
+    except:
+        return None, 10000
+    else:
+        return pose, residual
 
 
