@@ -393,6 +393,10 @@ def apply_pass_through_filter(o3dpc, x_range, y_range, z_range):
     z_range = np.logical_and(cloud_npy[:, 2] >= z_range[0], cloud_npy[:, 2] <= z_range[1])
     pass_through_filter = np.logical_and(x_range, np.logical_and(y_range, z_range))
     o3dpc.points = open3d.utility.Vector3dVector(cloud_npy[pass_through_filter])
+    
+    colors = np.asarray(o3dpc.colors)
+    if len(colors) > 0:
+        o3dpc.colors = open3d.utility.Vector3dVector(colors[pass_through_filter])
     return o3dpc
 
 def crop_with_2dmask(o3dpc, mask, K=None):
