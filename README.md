@@ -302,7 +302,7 @@ covert ros point cloud to open3d point cloud
 #### o3dpc\_to\_rospc
 
 ```python
-o3dpc_to_rospc(o3dpc, frame_id=None)
+o3dpc_to_rospc(o3dpc, frame_id=None, stamp=None)
 ```
 
 convert open3d point cloud to ros point cloud
@@ -311,6 +311,7 @@ convert open3d point cloud to ros point cloud
 
 - `o3dpc` _open3d.geometry.PointCloud_ - open3d point cloud
 - `frame_id` _string_ - frame id of ros point cloud header
+- `stamp` _rospy.Time_ - time stamp of ros point cloud header
 
 **Returns**:
 

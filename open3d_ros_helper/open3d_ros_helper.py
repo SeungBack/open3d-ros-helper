@@ -288,11 +288,12 @@ def rospc_to_o3dpc(rospc, remove_nans=False):
 BIT_MOVE_16 = 2**16
 BIT_MOVE_8 = 2**8
 
-def o3dpc_to_rospc(o3dpc, frame_id=None):
+def o3dpc_to_rospc(o3dpc, frame_id=None, stamp=None):
     """ convert open3d point cloud to ros point cloud
-    Args: 
+    Args:
         o3dpc (open3d.geometry.PointCloud): open3d point cloud
         frame_id (string): frame id of ros point cloud header
+        stamp (rospy.Time): time stamp of ros point cloud header
     Returns:
         rospc (sensor.msg.PointCloud2): ros point cloud message
     """
@@ -330,7 +331,10 @@ def o3dpc_to_rospc(o3dpc, frame_id=None):
     if frame_id is not None:
         rospc.header.frame_id = frame_id
 
-    rospc.header.stamp = rospy.Time.now()
+    if stamp is None:
+        rospc.header.stamp = rospy.Time.now()
+    else:
+        rospc.header.stamp = stamp
     rospc.height = 1
     rospc.width = n_points
     rospc.fields = []
