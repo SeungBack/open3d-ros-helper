@@ -8,35 +8,44 @@
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/SeungBack/open3d-ros-helper/issues)
 
 
-- Helper for jointly using open3d and numpy in ROS
-- Easy conversion between ros pose and transform 
-- Easy conversion between ros and open3d point cloud
-- Currently, supports only XYZ point cloud 
+- Helper for jointly using open3d and ROS
+- Easy conversion between ROS and open3d point cloud (supports both XYZ & XYZRGB point cloud)
+- Easy conversion between ROS pose and transform 
 
 ## Dependencies
 - python 2.7
+- ros-numpy
 - open3d == 0.9 
 
 ## Installation
 ```
-$ pip install open3d_ros_helper
+$ sudo apt install ros-melodic-ros-numpy
+$ pip2 install numpy open3d==0.9.0 opencv-python==4.2.0.32 pyrsistent==0.13
+$ pip2 install open3d_ros_helper
 ```
 
 ## Usage
+
+Import `open3d-ros-helper`
 ```
->>> from open3d_ros_helper import open3d_ros_helper as orh
->>> import numpy as np
+from open3d_ros_helper import open3d_ros_helper as orh
+```
 
-## conversion b/w ros transform
->>> se3 = np.eye(4)
-# convert 4x4 SE(3) to geometry_msgs/Transform
->>> ros_transform = orh.se3_to_transform(se3) 
+Convert `4x4 SE(3)` to `geometry_msgs/Transform`
+```
+import numpy as np
+se3 = np.eye(4)
+ros_transform = orh.se3_to_transform(se3) 
+```
 
-## conversion b/w ros and open3d point cloud
-# convert sensor.msg.PointCloud2 to open3d.geometry.PointCloud
->>> o3dpc = orh.rospc_to_o3dpc(some_ros_pointcloud) 
-# convert open3d.geometry.PointCloud to sensor.msg.PointCloud2
->>> rospc = orh.rospc_to_o3dpc(o3dpc) 
+Convert `sensor.msg.PointCloud2` to `open3d.geometry.PointCloud`
+```
+o3dpc = orh.rospc_to_o3dpc(some_ros_pointcloud) 
+```
+
+Convert `open3d.geometry.PointCloud` to `sensor.msg.PointCloud2`
+```
+rospc = orh.rospc_to_o3dpc(o3dpc) 
 ```
 
 ## Authors
@@ -44,6 +53,7 @@ $ pip install open3d_ros_helper
 
 ## License
 This project is licensed under the MIT License
+
 
 ## References
 Some codes are rewritten from

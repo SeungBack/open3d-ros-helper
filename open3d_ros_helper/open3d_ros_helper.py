@@ -271,8 +271,10 @@ def rospc_to_o3dpc(rospc, remove_nans=False):
     cloud_npy[...,1] = cloud_array['y']
     cloud_npy[...,2] = cloud_array['z']
     o3dpc = open3d.geometry.PointCloud()
-    cloud_npy = np.reshape(cloud_npy[:, :, :3], [-1, 3], 'F')
-    o3dpc.points = open3d.utility.Vector3dVector(cloud_npy)
+
+    if len(np.shape(cloud_npy)) == 3:
+        cloud_npy = np.reshape(cloud_npy[:, :, :3], [-1, 3], 'F')
+    o3dpc.points = open3d.utility.Vector3dVector(cloud_npy[:, :3])
 
     if is_rgb:
         rgb_npy = cloud_array['rgb']
