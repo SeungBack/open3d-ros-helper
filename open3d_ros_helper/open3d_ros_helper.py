@@ -258,7 +258,7 @@ def rospc_to_o3dpc(rospc, remove_nans=False):
     """
     field_names = [field.name for field in rospc.fields]
     is_rgb = 'rgb' in field_names
-    cloud_array = ros_numpy.point_cloud2.pointcloud2_to_array(rospc)
+    cloud_array = ros_numpy.point_cloud2.pointcloud2_to_array(rospc).ravel()
     if remove_nans:
         mask = np.isfinite(cloud_array['x']) & np.isfinite(cloud_array['y']) & np.isfinite(cloud_array['z'])
         cloud_array = cloud_array[mask]
