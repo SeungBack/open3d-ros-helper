@@ -263,9 +263,9 @@ def rospc_to_o3dpc(rospc, remove_nans=False):
         mask = np.isfinite(cloud_array['x']) & np.isfinite(cloud_array['y']) & np.isfinite(cloud_array['z'])
         cloud_array = cloud_array[mask]
     if is_rgb:
-        cloud_npy = np.zeros(cloud_array.shape + (4,), dtype=np.float)
+        cloud_npy = np.zeros(cloud_array.shape + (4,), dtype=float)
     else: 
-        cloud_npy = np.zeros(cloud_array.shape + (3,), dtype=np.float)
+        cloud_npy = np.zeros(cloud_array.shape + (3,), dtype=float)
     
     cloud_npy[...,0] = cloud_array['x']
     cloud_npy[...,1] = cloud_array['y']
@@ -283,7 +283,7 @@ def rospc_to_o3dpc(rospc, remove_nans=False):
         g = np.asarray((rgb_npy >> 8) & 255, dtype=np.uint8)
         b = np.asarray(rgb_npy & 255, dtype=np.uint8)
         rgb_npy = np.asarray([r, g, b])
-        rgb_npy = rgb_npy.astype(np.float)/255
+        rgb_npy = rgb_npy.astype(float)/255
         rgb_npy = np.swapaxes(rgb_npy, 0, 1)
         o3dpc.colors = open3d.utility.Vector3dVector(rgb_npy)
     return o3dpc
